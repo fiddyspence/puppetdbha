@@ -1,0 +1,32 @@
+[root@puppet1 puppetlabs]# crm configure show
+node puppet1.spence.org.uk.local
+node puppet2.spence.org.uk.local
+primitive drbd_pg ocf:linbit:drbd \
+        params drbd_resource="pg" \
+        op monitor interval="0" timeout="120"
+primitive pe_pgsql ocf:heartbeat:pe-pgsql \
+        op monitor interval="30" timeout="30" depth="0"
+primitive pg_fs ocf:heartbeat:Filesystem \
+        params device="/dev/VG_PG/LV_DATA" directory="/db/pgdata" options="noatime,nodiratime" fstype="ext3" \
+        op start interval="0" timeout="120"
+primitive pg_lvm ocf:heartbeat:LVM \
+        params volgrpname="VG_PG" \
+        op start interval="0" timeout="30"
+primitive pg_vip ocf:heartbeat:IPaddr2 \
+        params ip="192.168.0.25" iflabel="pgvip" \
+        op monitor interval="5"
+group PGServer pg_lvm pg_fs pg_vip pe_pgsql
+ms ms_drbd_pg drbd_pg \
+        meta master-max="1" master-node-max="1" clone-max="2" clone-node-max="1" notify="true"
+location cli-prefer-PGServer PGServer \
+        rule $id="cli-prefer-rule-PGServer" inf: #uname eq puppet1.spence.org.uk.local
+colocation colocation-PGServer-ms_drbd_pg-INFINITY inf: PGServer ms_drbd_pg:Master
+order order-ms_drbd_pg-PGServer-mandatory : ms_drbd_pg:promote PGServer:start
+property $id="cib-bootstrap-options" \
+        dc-version="1.1.8-7.el6-394e906" \
+        cluster-infrastructure="classic openais (with plugin)" \
+        expected-quorum-votes="2" \
+        stonith-enabled="false" \
+        no-quorum-policy="ignore" \
+        default-resource-stickiness="100" \
+        last-lrm-refresh="1373369015"
